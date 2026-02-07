@@ -1,0 +1,112 @@
+{
+  "_comment": "SuperClaw gateway configuration",
+  "_docs": "Copy to ~/.superclaw/superclaw.json and customize",
+
+  "gateway": {
+    "port": 18789,
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true,
+          "_comment": "Enables /v1/chat/completions — required for ElevenLabs phone integration"
+        }
+      }
+    },
+    "auth": {
+      "token": "GENERATE_A_SECURE_TOKEN_HERE",
+      "_comment": "Run: python3 -c \"import secrets; print(secrets.token_hex(24))\""
+    }
+  },
+
+  "agents": {
+    "list": [
+      {
+        "id": "coordinator",
+        "name": "Coordinator",
+        "role": "Prime agent — orchestrates tasks, delegates to specialists",
+        "tools": {
+          "allow": [
+            "group:runtime", "group:fs", "group:web",
+            "group:sessions", "group:memory", "group:ui",
+            "group:automation", "task_*", "memory_*"
+          ]
+        }
+      },
+      {
+        "id": "developer",
+        "name": "Developer",
+        "role": "Code implementation, testing, debugging",
+        "tools": {
+          "allow": [
+            "group:runtime", "group:fs", "group:memory",
+            "task_*", "memory_*"
+          ]
+        }
+      },
+      {
+        "id": "researcher",
+        "name": "Researcher",
+        "role": "Web research, documentation analysis, knowledge gathering",
+        "tools": {
+          "allow": [
+            "group:web", "file_read", "group:memory",
+            "task_*", "memory_*", "session_status"
+          ]
+        }
+      },
+      {
+        "id": "monitor",
+        "name": "Monitor",
+        "role": "Infrastructure monitoring, health checks, alerting",
+        "tools": {
+          "allow": [
+            "group:runtime", "group:fs", "group:sessions",
+            "group:memory", "group:automation",
+            "task_*", "memory_*"
+          ]
+        }
+      },
+      {
+        "id": "analyst",
+        "name": "Analyst",
+        "role": "Read-only analysis, reporting, budget tracking",
+        "tools": {
+          "allow": [
+            "file_read", "session_status", "group:memory",
+            "task_*", "memory_*"
+          ]
+        }
+      }
+    ]
+  },
+
+  "plugins": {
+    "slots": {
+      "memory": "memory-lancedb"
+    },
+    "entries": {
+      "memory-lancedb": {
+        "config": {
+          "provider": "ollama",
+          "model": "nomic-embed-text",
+          "baseUrl": "http://localhost:11434"
+        }
+      },
+      "task-manager": {
+        "config": {
+          "tasksFile": "~/.superclaw/workspace/memory/squad/TASKS.json"
+        }
+      }
+    }
+  },
+
+  "_discord_setup": {
+    "_comment": "To enable Discord text integration, run: superclaw onboard",
+    "_steps": [
+      "1. Create bot at https://discord.com/developers/applications",
+      "2. Enable Message Content Intent in bot settings",
+      "3. Run: superclaw onboard → select Discord → paste bot token",
+      "4. For voice channels, use bridge/discord_bridge.py separately"
+    ]
+  }
+}

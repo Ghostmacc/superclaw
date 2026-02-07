@@ -1,0 +1,43 @@
+{
+  "name": "Terminal State Events",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "terminal-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "c3d4e5f6-0006-4000-8000-000000000001",
+      "name": "Terminal Events Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 340],
+      "webhookId": "terminal-events"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update terminal-status.json with SLP state changes\n// This bridges Hermes SLP watchdog → dashboard live view\nconst event = $input.first().json;\nconst payload = event.payload || {};\nconst terminalId = payload.terminal_id;\nconst newState = payload.new_state;\nconst now = Math.floor(Date.now() / 1000);\n\nif (!terminalId) {\n  return [{ json: { skipped: true, reason: 'no terminal_id' } }];\n}\n\n// Read existing status\nlet status = {};\ntry {\n  const fs = require('fs');\n  const raw = fs.readFileSync('/data/shared/terminal-status.json', 'utf8');\n  status = JSON.parse(raw);\n} catch { /* file may not exist */ }\n\n// Update the SLP metadata for this terminal\nif (!status._slp) status._slp = {};\nstatus._slp[terminalId] = {\n  state: newState,\n  event: payload.event,\n  updated: now,\n};\nstatus._slp_updated = now;\n\n// Write back\ntry {\n  const fs = require('fs');\n  fs.writeFileSync('/data/shared/terminal-status.json', JSON.stringify(status, null, 2));\n} catch (e) {\n  return [{ json: { error: e.message } }];\n}\n\nreturn [{ json: { updated: true, terminal: terminalId, state: newState } }];"
+      },
+      "id": "c3d4e5f6-0006-4000-8000-000000000002",
+      "name": "Update Terminal Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 340]
+    }
+  ],
+  "connections": {
+    "Terminal Events Webhook": {
+      "main": [[{ "node": "Update Terminal Status", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [{ "name": "superclaw" }, { "name": "monitoring" }],
+  "triggerCount": 1,
+  "pinData": {},
+  "versionId": "1"
+}

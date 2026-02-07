@@ -1,0 +1,68 @@
+{
+  "_comment": "ElevenLabs Agent config for phone calls via SuperClaw",
+  "_docs": "See docs/VOICE.md for full setup guide",
+
+  "setup_steps": {
+    "1_prerequisites": {
+      "elevenlabs_account": "https://elevenlabs.io — sign up and get API key",
+      "ngrok": "https://ngrok.com — needed to expose SuperClaw gateway to internet",
+      "twilio": "https://twilio.com — needed for phone number (optional)",
+      "superclaw_chat_completions": "Must be enabled in superclaw.json (see configs/superclaw.json.example)"
+    },
+
+    "2_expose_gateway": {
+      "command": "ngrok http 18789",
+      "note": "Replace 18789 with your SUPERCLAW_PORT. Copy the https:// URL."
+    },
+
+    "3_create_secret": {
+      "description": "Store your SuperClaw gateway token as an ElevenLabs secret",
+      "curl": "curl -X POST https://api.elevenlabs.io/v1/convai/secrets -H 'xi-api-key: YOUR_ELEVENLABS_API_KEY' -H 'Content-Type: application/json' -d '{\"type\": \"new\", \"name\": \"superclaw_gateway_token\", \"value\": \"YOUR_SUPERCLAW_GATEWAY_TOKEN\"}'",
+      "note": "Save the returned secret_id for step 4"
+    },
+
+    "4_create_agent": {
+      "description": "Create an ElevenLabs Agent pointing at your SuperClaw gateway",
+      "curl_template": "curl -X POST https://api.elevenlabs.io/v1/convai/agents/create -H 'xi-api-key: YOUR_ELEVENLABS_API_KEY' -H 'Content-Type: application/json' -d @-",
+      "body": {
+        "conversation_config": {
+          "agent": {
+            "language": "en",
+            "prompt": {
+              "llm": "custom-llm",
+              "prompt": "You are a helpful assistant connected to the SuperClaw agent network.",
+              "custom_llm": {
+                "url": "https://YOUR_NGROK_URL.ngrok-free.app/v1/chat/completions",
+                "api_key": {"secret_id": "RETURNED_SECRET_ID_FROM_STEP_3"}
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "5_phone_number": {
+      "description": "Optional: Connect a Twilio phone number for inbound calls",
+      "steps": [
+        "Buy a phone number at https://console.twilio.com",
+        "In ElevenLabs Agent settings, go to Phone Numbers",
+        "Enter your Twilio Account SID and Auth Token",
+        "Select the phone number to connect",
+        "Call the number — you're now talking to your agents"
+      ]
+    }
+  },
+
+  "environment_variables": {
+    "ELEVENLABS_API_KEY": "Your ElevenLabs API key",
+    "SUPERCLAW_GATEWAY_TOKEN": "Found in ~/.superclaw/superclaw.json under gateway.auth.token",
+    "NGROK_URL": "Your ngrok public URL (changes each session unless you have a paid plan)"
+  },
+
+  "how_it_works": {
+    "flow": "Phone → Twilio → ElevenLabs Agent → ngrok → SuperClaw /v1/chat/completions → Agent",
+    "elevenlabs_handles": ["Speech-to-text", "Text-to-speech", "Turn-taking", "Voice synthesis", "Phone routing"],
+    "superclaw_handles": ["Tool execution", "Agent memory", "Task management", "Skill routing"],
+    "protocol": "OpenAI-compatible /v1/chat/completions — ElevenLabs treats SuperClaw as a custom LLM"
+  }
+}

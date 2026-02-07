@@ -1,0 +1,43 @@
+{
+  "name": "Agent Activity Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-activity",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "c3d4e5f6-0005-4000-8000-000000000001",
+      "name": "Agent Activity Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 340],
+      "webhookId": "agent-activity"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Track agent activity for dashboard + token reporting\nconst event = $input.first().json;\nconst payload = event.payload || {};\nconst now = new Date().toISOString();\n\n// Build activity record\nconst activity = {\n  agent: payload.agent || event.source || 'unknown',\n  event_type: event.event_type,\n  caller: payload.caller || 'system',\n  purpose: payload.purpose || 'general',\n  latency_ms: payload.latency_ms || null,\n  response_preview: (payload.response_preview || '').substring(0, 150),\n  timestamp: event.timestamp || now,\n};\n\n// Try to update the shared activity log\ntry {\n  const fs = require('fs');\n  const logPath = '/data/shared/agent-activity.jsonl';\n  fs.appendFileSync(logPath, JSON.stringify(activity) + '\\n');\n} catch (e) {\n  // Non-fatal: log file may not exist yet\n}\n\nreturn [{ json: activity }];"
+      },
+      "id": "c3d4e5f6-0005-4000-8000-000000000002",
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 340]
+    }
+  ],
+  "connections": {
+    "Agent Activity Webhook": {
+      "main": [[{ "node": "Log Activity", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [{ "name": "superclaw" }, { "name": "monitoring" }],
+  "triggerCount": 1,
+  "pinData": {},
+  "versionId": "1"
+}

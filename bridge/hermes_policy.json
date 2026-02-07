@@ -1,0 +1,99 @@
+{
+  "version": "1.0",
+  "name": "hermes-bridge-policy",
+  "description": "Access control and rate limits for Hermes Bridge",
+
+  "global_limits": {
+    "calls_per_hour": 60,
+    "cost_per_hour_usd": 5.00,
+    "cost_per_day_usd": 25.00
+  },
+
+  "quiet_hours": {
+    "start": "23:00",
+    "end": "08:00",
+    "_note": "Timezone is set via QUIET_TZ env var (default: America/Chicago)",
+    "allow_priority": ["critical"]
+  },
+
+  "per_agent": {
+    "coordinator": {
+      "calls_per_hour": 20,
+      "priority_levels": ["low", "normal", "high", "critical"]
+    },
+    "developer": {
+      "calls_per_hour": 10,
+      "priority_levels": ["low", "normal", "high"]
+    },
+    "researcher": {
+      "calls_per_hour": 10,
+      "priority_levels": ["low", "normal", "high"]
+    },
+    "monitor": {
+      "calls_per_hour": 10,
+      "priority_levels": ["low", "normal", "high", "critical"]
+    },
+    "analyst": {
+      "calls_per_hour": 5,
+      "priority_levels": ["low", "normal"]
+    },
+    "claude": {
+      "calls_per_hour": 30,
+      "priority_levels": ["low", "normal", "high", "critical"],
+      "note": "CLI-to-agent calls have no API cost (local routing)"
+    },
+    "dashboard": {
+      "calls_per_hour": 60,
+      "priority_levels": ["low", "normal", "high", "critical"],
+      "note": "Human operator interface — full access, quiet hours bypassed"
+    },
+    "voice_bridge": {
+      "calls_per_hour": 120,
+      "priority_levels": ["normal", "high"],
+      "note": "Local voice interface — high rate for real-time conversation"
+    },
+    "discord_bridge": {
+      "calls_per_hour": 120,
+      "priority_levels": ["normal", "high"],
+      "note": "Discord voice bot — high rate for real-time conversation"
+    },
+    "compaction": {
+      "calls_per_hour": 12,
+      "priority_levels": ["low", "normal", "high"],
+      "quiet_hours_exempt": true,
+      "note": "Session compaction pipeline — must reach agents anytime for self-summary"
+    },
+    "session-monitor": {
+      "calls_per_hour": 20,
+      "priority_levels": ["low", "normal", "high"],
+      "quiet_hours_exempt": true,
+      "note": "Session size monitor — must fire alerts anytime"
+    }
+  },
+
+  "event_webhooks": {
+    "_comment": "Maps event_type to n8n webhook path. _default catches unmapped events.",
+    "_default": "/webhook/hermes-events",
+    "task.created": "/webhook/hermes-events",
+    "task.status_changed": "/webhook/hermes-events",
+    "agent.response": "/webhook/agent-activity",
+    "terminal.state_changed": "/webhook/terminal-events",
+    "alert.service_down": "/webhook/agent-alert",
+    "agent.heartbeat": "/webhook/agent-activity",
+    "report.generated": "/webhook/hermes-events"
+  },
+
+  "n8n": {
+    "base_url": "http://localhost:5678",
+    "webhook_prefix": "/webhook",
+    "allowed_workflows": ["*"],
+    "max_triggers_per_hour": 30
+  },
+
+  "audit": {
+    "log_to_postgres": true,
+    "log_to_jsonl": true,
+    "jsonl_path": "~/.superclaw/workspace/memory/hermes_audit.jsonl",
+    "retain_days": 90
+  }
+}

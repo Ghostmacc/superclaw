@@ -1,0 +1,81 @@
+# SuperClaw Docker Stack
+# Core services: PostgreSQL, Qdrant, n8n
+# Ollama runs on host (not in Docker) for GPU access
+#
+# IMPORTANT: Copy .env.example to .env and set POSTGRES_PASSWORD before starting.
+# Run 'python3 setup.py' to generate credentials automatically.
+
+volumes:
+  postgres_storage:
+  qdrant_storage:
+  n8n_storage:
+
+networks:
+  superclaw:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    hostname: postgres
+    container_name: superclaw-postgres
+    networks: ['superclaw']
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-superclaw}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-superclaw}
+    volumes:
+      - postgres_storage:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h localhost -U ${POSTGRES_USER:-superclaw} -d ${POSTGRES_DB:-superclaw}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant
+    hostname: qdrant
+    container_name: superclaw-qdrant
+    networks: ['superclaw']
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:6333/collections || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:latest
+    hostname: n8n
+    container_name: superclaw-n8n
+    networks: ['superclaw']
+    restart: unless-stopped
+    # n8n needs root to write to its data directory in the Docker volume
+    user: root
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-superclaw}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-superclaw}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_JWT_SECRET}
+      - OLLAMA_HOST=host.docker.internal:11434
+    volumes:
+      - n8n_storage:/home/node/.n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy

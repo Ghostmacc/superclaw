@@ -1,0 +1,31 @@
+# SuperClaw Voice Bridge Dependencies
+# Install in a Python 3.12 venv (NOT 3.14 — compatibility issues)
+# Usage: pip install -r voice_requirements.txt
+
+# STT — Speech to Text
+faster-whisper>=1.1.0       # CTranslate2-based Whisper (4x faster, less VRAM)
+
+# TTS — Text to Speech
+edge-tts>=7.0.0             # Microsoft Edge Neural Voices (free, async, high quality)
+
+# Audio capture & playback
+sounddevice>=0.5.0          # PortAudio wrapper (mic input / speaker output)
+soundfile>=0.13.0           # Audio file read/write (WAV, FLAC)
+pydub>=0.25.1               # Audio format conversion (uses ffmpeg)
+
+# Voice Activity Detection
+webrtcvad>=2.0.10           # Google WebRTC VAD (speech boundary detection)
+
+# HTTP client (async)
+aiohttp>=3.10.0             # Async HTTP for Hermes Bridge calls
+
+# Web framework (for voice bridge API)
+fastapi>=0.109.0            # HTTP endpoints + WebSocket
+uvicorn>=0.27.0             # ASGI server
+websockets>=13.0            # WebSocket support for real-time streaming
+
+# Discord voice bot
+py-cord[voice]>=2.6.0       # Discord API with voice channel support (recording + playback)
+
+# Shared
+numpy>=1.26.0               # Array operations (audio buffers)

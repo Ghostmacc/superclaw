@@ -1,0 +1,350 @@
+{
+  "name": "Agent Alerts (SuperClaw)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 340],
+      "webhookId": "agent-alert-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and normalize the incoming alert payload\nconst body = $input.first().json.body;\n\nconst agentId = body.agent_id;\nconst severity = (body.severity || 'info').toLowerCase();\nconst title = body.title;\nconst details = body.details || '';\n\nif (!agentId || !title) {\n  throw new Error('Missing required fields: agent_id, title');\n}\n\nif (!['info', 'warning', 'critical'].includes(severity)) {\n  throw new Error(`Invalid severity: ${severity}. Must be info, warning, or critical.`);\n}\n\nconst timestamp = new Date().toISOString();\n\n// Build severity label and emoji for notifications\nconst severityConfig = {\n  info:     { label: 'INFO',     emoji: 'ℹ️',  color: '#2196F3' },\n  warning:  { label: 'WARNING',  emoji: '⚠️',  color: '#FF9800' },\n  critical: { label: 'CRITICAL', emoji: '🚨', color: '#F44336' }\n};\n\nconst cfg = severityConfig[severity];\n\n// Build email HTML body\nconst emailHtml = `<div style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;line-height:1.6;color:#333;\">\n  <div style=\"background:${cfg.color};color:white;padding:12px 16px;border-radius:4px 4px 0 0;\">\n    <strong>${cfg.emoji} ${cfg.label}: ${title}</strong>\n  </div>\n  <div style=\"border:1px solid #ddd;border-top:none;padding:16px;border-radius:0 0 4px 4px;\">\n    <p><strong>Agent:</strong> ${agentId}</p>\n    <p><strong>Severity:</strong> ${severity}</p>\n    <p><strong>Time:</strong> ${timestamp}</p>\n    <hr style=\"border:none;border-top:1px solid #eee;\"/>\n    <p>${details.replace(/\\n/g, '<br/>')}</p>\n  </div>\n  <p style=\"color:#888;font-size:12px;margin-top:8px;\">&mdash; SuperClaw Agent Alerts</p>\n</div>`;\n\n// Build Telegram message (plain text with markdown)\nconst telegramMessage = `${cfg.emoji} *${cfg.label}*: ${title}\\n\\n*Agent:* ${agentId}\\n*Time:* ${timestamp}\\n\\n${details}`;\n\nreturn [{\n  json: {\n    agentId,\n    severity,\n    title,\n    details,\n    timestamp,\n    emailSubject: `[${cfg.label}] ${title} — Agent: ${agentId}`,\n    emailHtml,\n    telegramMessage\n  }\n}];"
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000002",
+      "name": "Validate & Format Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-critical",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "critical",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000003",
+      "name": "Is Critical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-warning",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "warning",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000004",
+      "name": "Is Warning?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 480]
+    },
+    {
+      "parameters": {
+        "sendTo": "operator@example.com",
+        "subject": "={{ $('Validate & Format Alert').item.json.emailSubject }}",
+        "emailType": "html",
+        "message": "={{ $('Validate & Format Alert').item.json.emailHtml }}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000005",
+      "name": "Email (Critical)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [900, 160],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "superclaw-gmail-oauth2",
+          "name": "SuperClaw Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $('Validate & Format Alert').item.json.telegramMessage }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000006",
+      "name": "Telegram (Critical)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [900, 340],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-superclaw",
+          "name": "SuperClaw Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "operator@example.com",
+        "subject": "={{ $('Validate & Format Alert').item.json.emailSubject }}",
+        "emailType": "html",
+        "message": "={{ $('Validate & Format Alert').item.json.emailHtml }}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000007",
+      "name": "Email (Warning)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [900, 480],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "superclaw-gmail-oauth2",
+          "name": "SuperClaw Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Info severity: log only, no notification sent\nconst item = $input.first().json;\n\nconsole.log(`[AGENT ALERT][INFO] Agent: ${item.agentId} | Title: ${item.title} | Details: ${item.details} | Time: ${item.timestamp}`);\n\nreturn [{\n  json: {\n    logged: true,\n    severity: 'info',\n    agentId: item.agentId,\n    title: item.title,\n    timestamp: item.timestamp,\n    action: 'logged_only'\n  }\n}];"
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000008",
+      "name": "Log Info Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 620]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge results from critical path (email + telegram both complete)\nconst items = $input.all();\nreturn [{\n  json: {\n    success: true,\n    action: 'email_and_telegram_sent',\n    severity: 'critical',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000009",
+      "name": "Merge Critical Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, severity: $('Validate & Format Alert').item.json.severity, agent_id: $('Validate & Format Alert').item.json.agentId, title: $('Validate & Format Alert').item.json.title, action: $json.action || 'notification_sent', timestamp: new Date().toISOString() }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000010",
+      "name": "Success Response (Critical)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1360, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, severity: 'warning', agent_id: $('Validate & Format Alert').item.json.agentId, title: $('Validate & Format Alert').item.json.title, action: 'email_sent', timestamp: new Date().toISOString() }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000011",
+      "name": "Success Response (Warning)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1140, 480]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, severity: 'info', agent_id: $json.agentId, title: $json.title, action: 'logged_only', timestamp: $json.timestamp }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000012",
+      "name": "Success Response (Info)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1140, 620]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Format Alert": {
+      "main": [
+        [
+          {
+            "node": "Is Critical?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Critical?": {
+      "main": [
+        [
+          {
+            "node": "Email (Critical)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram (Critical)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Warning?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Warning?": {
+      "main": [
+        [
+          {
+            "node": "Email (Warning)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Info Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email (Critical)": {
+      "main": [
+        [
+          {
+            "node": "Merge Critical Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram (Critical)": {
+      "main": [
+        [
+          {
+            "node": "Merge Critical Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Critical Results": {
+      "main": [
+        [
+          {
+            "node": "Success Response (Critical)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email (Warning)": {
+      "main": [
+        [
+          {
+            "node": "Success Response (Warning)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Info Only": {
+      "main": [
+        [
+          {
+            "node": "Success Response (Info)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "superclaw"
+    },
+    {
+      "name": "alerts"
+    },
+    {
+      "name": "monitoring"
+    }
+  ],
+  "triggerCount": 1,
+  "pinData": {},
+  "versionId": "1"
+}

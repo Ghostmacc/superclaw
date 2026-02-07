@@ -1,0 +1,45 @@
+# Environment
+.env
+.env.backup
+*.env.local
+venv/
+bridge/voice-venv/
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime data
+*.db
+*.db-journal
+*.lock
+*.log
+*.jsonl
+dashboard/mission-control-data.json
+
+# User data (never commit)
+corpus/
+memory/
+workspace/
+sessions/
+
+# IP Fence (contains private term definitions — local-only tool)
+scripts/ip-fence.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+shared/
+postgres_storage/
+qdrant_storage/
+n8n_storage/
+
+# Node
+node_modules/

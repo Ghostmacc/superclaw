@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperClaw - Mission Control</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --bg-card-hover: #1c2129;
+            --border: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --blue: #58a6ff;
+            --purple: #a371f7;
+            --cyan: #79c0ff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark); color: var(--text-primary); min-height: 100vh;
+        }
+        .header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .header-left { display: flex; align-items: center; gap: 2rem; }
+        .header h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: 0.05em; color: var(--cyan); }
+        .header-stats { display: flex; gap: 1.5rem; }
+        .stat { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
+        .stat-value { font-weight: 600; }
+        .stat-label { color: var(--text-secondary); }
+        .header-right { display: flex; align-items: center; gap: 1rem; }
+        .current-time { font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem; color: var(--text-secondary); }
+        .refresh-btn { background: var(--bg-card-hover); border: 1px solid var(--border); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; }
+        .refresh-btn:hover { background: var(--border); }
+        .main { display: grid; grid-template-columns: 280px 1fr 320px; height: calc(100vh - 60px); overflow: hidden; }
+        .main.chat-open { grid-template-columns: 280px 1fr 0px; }
+        .agent-panel { background: var(--bg-card); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; }
+        .panel-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+        .agent-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 0.875rem; margin-bottom: 0.75rem; cursor: pointer; transition: all 0.2s; }
+        .agent-card:hover { border-color: var(--cyan); }
+        .agent-card.chat-active { border-color: var(--cyan); background: var(--bg-card-hover); }
+        .agent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .agent-name { font-weight: 600; font-size: 0.9375rem; }
+        .agent-actions { display: flex; align-items: center; gap: 0.5rem; }
+        .chat-badge { font-size: 0.625rem; background: var(--cyan); color: var(--bg-dark); padding: 0.125rem 0.375rem; border-radius: 3px; font-weight: 700; text-transform: uppercase; opacity: 0; transition: opacity 0.2s; }
+        .agent-card:hover .chat-badge { opacity: 1; }
+        .status-indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-idle { background: var(--text-muted); }
+        .status-active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-blocked { background: var(--red); box-shadow: 0 0 8px var(--red); }
+        .agent-task { font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .agent-role { font-size: 0.75rem; color: var(--purple); margin-bottom: 0.25rem; font-weight: 500; }
+        .agent-checkin { font-size: 0.75rem; color: var(--text-muted); font-family: 'SF Mono', Monaco, monospace; }
+        .task-board { padding: 1rem; overflow: hidden; min-width: 0; }
+        .kanban { display: flex; gap: 0.75rem; height: 100%; width: 100%; }
+        .kanban-column { flex: 1 1 0; min-width: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; max-height: 100%; }
+        .column-header { padding: 0.875rem 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .column-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+        .column-count { background: var(--bg-dark); color: var(--text-muted); font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 10px; }
+        .column-content { flex: 1; overflow-y: auto; padding: 0.75rem; }
+        .task-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem; cursor: pointer; transition: all 0.2s; }
+        .task-card:hover { border-color: var(--blue); }
+        .task-card.expanded { border-color: var(--cyan); }
+        .task-title { font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; line-height: 1.4; }
+        .task-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+        .task-comment-badge { font-size: 0.65rem; background: var(--purple); color: var(--bg-dark); border-radius: 8px; padding: 0 0.4rem; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+        .task-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; }
+        .task-agent { color: var(--purple); font-weight: 500; }
+        .task-time { color: var(--text-muted); font-family: 'SF Mono', Monaco, monospace; }
+        .task-detail { display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.75rem; }
+        .task-card.expanded .task-detail { display: block; }
+        .task-description { color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.5; }
+        .task-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.5rem; }
+        .task-tag { font-size: 0.65rem; background: rgba(139, 92, 246, 0.15); color: var(--purple); padding: 0.1rem 0.4rem; border-radius: 3px; }
+        .task-priority { font-size: 0.65rem; font-weight: 600; padding: 0.1rem 0.4rem; border-radius: 3px; margin-bottom: 0.5rem; display: inline-block; }
+        .task-priority.critical { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+        .task-priority.high { background: rgba(245, 158, 11, 0.2); color: var(--yellow); }
+        .task-comments-header { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+        .task-comment { background: rgba(0,0,0,0.2); border-radius: 4px; padding: 0.5rem; margin-bottom: 0.25rem; }
+        .task-comment-meta { display: flex; justify-content: space-between; font-size: 0.65rem; margin-bottom: 0.25rem; }
+        .task-comment-agent { color: var(--cyan); font-weight: 500; }
+        .task-comment-time { color: var(--text-muted); }
+        .task-comment-text { color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+        .empty-column { color: var(--text-muted); text-align: center; padding: 2rem 1rem; font-size: 0.8125rem; }
+        .activity-feed { background: var(--bg-card); border-left: 1px solid var(--border); padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; position: relative; z-index: 2; }
+        .main.chat-open .activity-feed { display: none; }
+        .activity-section { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+        .activity-section.collapsed .activity-list-wrap { display: none; }
+        .activity-list-wrap { flex: 1; overflow-y: auto; min-height: 0; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .collapse-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; }
+        .collapse-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+        .activity-item { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
+        .activity-agent { font-weight: 600; font-size: 0.875rem; color: var(--cyan); }
+        .activity-time { font-size: 0.75rem; color: var(--text-muted); font-family: 'SF Mono', Monaco, monospace; }
+        .activity-text { font-size: 0.8125rem; color: var(--text-secondary); }
+        .budget-section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+        .context-section, .warnings-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+        .context-item { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 0.625rem; margin-bottom: 0.5rem; }
+        .context-title { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem; line-height: 1.35; }
+        .context-meta { font-size: 0.7rem; color: var(--text-muted); font-family: 'SF Mono', Monaco, monospace; }
+        .context-next { margin-top: 0.4rem; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.35; white-space: pre-wrap; }
+        .warning-item { background: var(--bg-dark); border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; padding: 0.5rem 0.625rem; margin-bottom: 0.5rem; }
+        .warning-item.critical { border-left-color: var(--red); }
+        .warning-item.high { border-left-color: #ff8f3f; }
+        .warning-item.medium { border-left-color: var(--yellow); }
+        .warning-item.low { border-left-color: var(--blue); }
+        .warning-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; font-size: 0.68rem; }
+        .warning-source { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .warning-level { font-weight: 700; text-transform: uppercase; }
+        .warning-text { color: var(--text-secondary); font-size: 0.78rem; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+        .warning-level.critical { color: var(--red); }
+        .warning-level.high { color: #ff8f3f; }
+        .warning-level.medium { color: var(--yellow); }
+        .warning-level.low { color: var(--blue); }
+        .budget-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 0.8125rem; }
+        .budget-label { color: var(--text-secondary); }
+        .budget-value { font-weight: 600; font-family: 'SF Mono', Monaco, monospace; }
+        .budget-warning { color: var(--yellow); }
+        .budget-ok { color: var(--green); }
+        .budget-sub-header { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .budget-divider { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+        .budget-secondary { font-size: 0.75rem; color: var(--text-muted); }
+        .budget-grand { font-size: 1.1rem; font-weight: 700; font-family: 'SF Mono', Monaco, monospace; }
+        .chat-panel { position: fixed; top: 60px; right: 0; width: 420px; height: calc(100vh - 60px); background: var(--bg-card); border-left: 2px solid var(--cyan); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.3s ease; z-index: 100; }
+        .chat-panel.open { transform: translateX(0); }
+        .chat-header { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .chat-header-left { display: flex; align-items: center; gap: 0.75rem; }
+        .chat-agent-info h3 { font-size: 1rem; font-weight: 600; color: var(--cyan); }
+        .chat-agent-info .chat-agent-role { font-size: 0.75rem; color: var(--purple); }
+        .chat-close-btn { background: none; border: 1px solid var(--border); color: var(--text-secondary); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+        .chat-close-btn:hover { border-color: var(--red); color: var(--red); }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+        .chat-msg { max-width: 90%; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.875rem; line-height: 1.5; word-wrap: break-word; }
+        .chat-msg.user { align-self: flex-end; background: #1a3a5c; border: 1px solid var(--blue); }
+        .chat-msg.agent { align-self: flex-start; background: var(--bg-dark); border: 1px solid var(--border); }
+        .chat-msg.system { align-self: center; background: none; border: none; color: var(--text-muted); font-size: 0.75rem; font-style: italic; padding: 0.25rem; }
+        .chat-msg.error { align-self: center; background: rgba(248, 81, 73, 0.1); border: 1px solid var(--red); color: var(--red); font-size: 0.8125rem; }
+        .chat-msg .msg-meta { font-size: 0.6875rem; color: var(--text-muted); margin-top: 0.375rem; font-family: 'SF Mono', Monaco, monospace; }
+        .chat-typing { align-self: flex-start; color: var(--text-muted); font-size: 0.8125rem; padding: 0.5rem 1rem; display: none; }
+        .chat-typing.visible { display: block; }
+        .typing-dots span { animation: blink 1.4s infinite both; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+        .chat-input-area { padding: 1rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; }
+        .chat-input { flex: 1; background: var(--bg-dark); border: 1px solid var(--border); color: var(--text-primary); padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; font-family: inherit; resize: none; outline: none; min-height: 42px; max-height: 120px; }
+        .chat-input:focus { border-color: var(--cyan); }
+        .chat-input::placeholder { color: var(--text-muted); }
+        .chat-send-btn { background: var(--cyan); border: none; color: var(--bg-dark); padding: 0 1rem; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 600; white-space: nowrap; }
+        .chat-send-btn:hover { opacity: 0.9; }
+        .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        .auto-refresh { font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; }
+        .pulse { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .hermes-status { font-size: 0.75rem; display: flex; align-items: center; gap: 0.375rem; }
+        .hermes-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .hermes-dot.online { background: var(--green); }
+        .hermes-dot.offline { background: var(--red); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <h1>SUPERCLAW MISSION CONTROL</h1>
+            <div class="header-stats">
+                <div class="stat"><span class="stat-value" id="activeAgents">0</span><span class="stat-label">active</span></div>
+                <div class="stat"><span class="stat-value" id="taskCount">0</span><span class="stat-label">tasks</span></div>
+                <div class="stat hermes-status"><span class="hermes-dot" id="hermesDot"></span><span id="hermesLabel">Hermes</span></div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="auto-refresh"><span class="pulse"></span><span>Auto: <span id="countdown">30</span>s</span></div>
+            <span class="current-time" id="currentTime"></span>
+            <button class="refresh-btn" onclick="loadData()">Refresh</button>
+        </div>
+    </header>
+    <main class="main" id="mainLayout">
+        <aside class="agent-panel">
+            <div class="panel-title">Agents <span style="float:right;color:var(--text-muted);font-weight:400;text-transform:none">click to chat</span></div>
+            <div id="agentList"></div>
+        </aside>
+        <section class="task-board">
+            <div class="kanban">
+                <div class="kanban-column"><div class="column-header"><span class="column-title">Inbox</span><span class="column-count" id="inboxCount">0</span></div><div class="column-content" id="inboxTasks"></div></div>
+                <div class="kanban-column"><div class="column-header"><span class="column-title">Assigned</span><span class="column-count" id="assignedCount">0</span></div><div class="column-content" id="assignedTasks"></div></div>
+                <div class="kanban-column"><div class="column-header"><span class="column-title">In Progress</span><span class="column-count" id="progressCount">0</span></div><div class="column-content" id="progressTasks"></div></div>
+                <div class="kanban-column"><div class="column-header"><span class="column-title">Review</span><span class="column-count" id="reviewCount">0</span></div><div class="column-content" id="reviewTasks"></div></div>
+                <div class="kanban-column"><div class="column-header"><span class="column-title">Done</span><span class="column-count" id="doneCount">0</span></div><div class="column-content" id="doneTasks"></div></div>
+            </div>
+        </section>
+        <aside class="activity-feed">
+            <div class="activity-section" id="activitySection">
+                <div class="section-header" onclick="toggleActivity()">
+                    <div class="panel-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">Activity</div>
+                    <button class="collapse-btn" id="activityToggle">-</button>
+                </div>
+                <div class="activity-list-wrap" style="margin-top:0.5rem"><div id="activityList"></div></div>
+            </div>
+            <div class="context-section">
+                <div class="panel-title">Context</div>
+                <div id="contextSummary"></div>
+            </div>
+            <div class="warnings-section">
+                <div class="panel-title">Operator Warnings</div>
+                <div id="warningList"></div>
+            </div>
+            <div class="budget-section">
+                <div class="panel-title">Budget</div>
+                <div id="budgetInfo"></div>
+            </div>
+        </aside>
+    </main>
+    <div class="chat-panel" id="chatPanel">
+        <div class="chat-header">
+            <div class="chat-header-left"><div class="chat-agent-info"><h3 id="chatAgentName"></h3><span class="chat-agent-role" id="chatAgentRole"></span></div></div>
+            <button class="chat-close-btn" onclick="closeChat()">X</button>
+        </div>
+        <div class="chat-messages" id="chatMessages"><div class="chat-msg system">Select an agent to start chatting.</div></div>
+        <div class="chat-typing" id="chatTyping"><span class="typing-dots"><span>.</span><span>.</span><span>.</span></span> <span id="typingAgent"></span> is thinking...</div>
+        <div class="chat-input-area">
+            <textarea class="chat-input" id="chatInput" placeholder="Message..." rows="1" onkeydown="handleChatKey(event)"></textarea>
+            <button class="chat-send-btn" id="chatSendBtn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+    <script>
+        const HERMES_URL = 'http://' + window.location.hostname + ':8787';
+        const AGENT_META = {
+            'coordinator': { id: 'coordinator', name: 'Coordinator', role: 'Task Routing', ocId: 'coordinator' },
+            'developer':   { id: 'developer',   name: 'Developer',   role: 'Code & Automation', ocId: 'developer' },
+            'researcher':  { id: 'researcher',  name: 'Researcher',  role: 'Intelligence',  ocId: 'researcher' },
+            'monitor':     { id: 'monitor',     name: 'Monitor',     role: 'Infrastructure', ocId: 'monitor' },
+            'analyst':     { id: 'analyst',     name: 'Analyst',     role: 'Cost Analysis',  ocId: 'analyst' },
+        };
+        const PROVIDER_COLORS = { 'kimi-coding':'var(--cyan)', 'openrouter':'var(--purple)', 'github-copilot':'var(--green)', 'openai-codex':'var(--blue)', 'anthropic':'var(--yellow)' };
+        function formatTokens(n) { if (!n) return '0'; if (n>=1e6) return (n/1e6).toFixed(1)+'M'; if (n>=1e3) return (n/1e3).toFixed(1)+'k'; return ''+n; }
+
+        let data = null, countdown = 30, countdownInterval = null, hermesOnline = false, currentChatAgent = null, chatHistories = {}, chatSending = false, usingSampleData = false;
+
+        async function checkHermes() {
+            try { const r = await fetch(HERMES_URL+'/api/v1/health',{signal:AbortSignal.timeout(3000)}); const d = await r.json(); hermesOnline = d.status==='healthy'||d.status==='degraded'; } catch { hermesOnline = false; }
+            document.getElementById('hermesDot').className = 'hermes-dot '+(hermesOnline?'online':'offline');
+            document.getElementById('hermesLabel').textContent = hermesOnline?'Hermes':'Hermes offline';
+        }
+
+        function openChat(k) {
+            const m = AGENT_META[k]; if (!m) return;
+            currentChatAgent = k;
+            document.getElementById('chatAgentName').textContent = m.name;
+            document.getElementById('chatAgentRole').textContent = m.role;
+            document.getElementById('typingAgent').textContent = m.name;
+            document.getElementById('chatPanel').classList.add('open');
+            document.getElementById('mainLayout').classList.add('chat-open');
+            document.querySelectorAll('.agent-card').forEach(c=>c.classList.remove('chat-active'));
+            const card = document.querySelector('.agent-card[data-agent="'+k+'"]');
+            if (card) card.classList.add('chat-active');
+            renderChat();
+            setTimeout(()=>document.getElementById('chatInput').focus(),300);
+        }
+
+        function closeChat() {
+            currentChatAgent = null;
+            document.getElementById('chatPanel').classList.remove('open');
+            document.getElementById('mainLayout').classList.remove('chat-open');
+            document.querySelectorAll('.agent-card').forEach(c=>c.classList.remove('chat-active'));
+        }
+
+        function renderChat() {
+            const el = document.getElementById('chatMessages');
+            const h = chatHistories[currentChatAgent]||[];
+            if (!h.length) { el.textContent = ''; const d = document.createElement('div'); d.className='chat-msg system'; d.textContent='Start a conversation with '+AGENT_META[currentChatAgent].name+'. Messages route through Hermes Bridge.'; el.appendChild(d); return; }
+            el.textContent = '';
+            h.forEach(msg => {
+                const d = document.createElement('div');
+                d.className = 'chat-msg '+(msg.role==='user'?'user':msg.role==='error'?'error':'agent');
+                d.textContent = msg.text;
+                if (msg.meta) { const m = document.createElement('div'); m.className='msg-meta'; m.textContent=msg.meta; d.appendChild(m); }
+                el.appendChild(d);
+            });
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function handleChatKey(e) { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendMessage(); } }
+
+        async function sendMessage() {
+            if (chatSending||!currentChatAgent||!hermesOnline) return;
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim(); if (!text) return;
+            const ak = currentChatAgent, m = AGENT_META[ak];
+            if (!chatHistories[ak]) chatHistories[ak]=[];
+            chatHistories[ak].push({role:'user',text:text,time:new Date().toLocaleTimeString('en-US',{hour12:false})});
+            input.value=''; renderChat();
+            chatSending=true; document.getElementById('chatTyping').classList.add('visible'); document.getElementById('chatSendBtn').disabled=true;
+            try {
+                const t0=Date.now();
+                const resp = await fetch(HERMES_URL+'/api/v1/agent/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({caller_id:'dashboard',target_agent:m.ocId,message:text,priority:'normal',purpose:'dashboard-chat'})});
+                const elapsed=Date.now()-t0;
+                if (!resp.ok) { const err=await resp.json().catch(()=>({detail:'HTTP '+resp.status})); chatHistories[ak].push({role:'error',text:err.detail||'Failed'}); }
+                else {
+                    const result=await resp.json(); let at=result.response||'No response', lat=result.latency_ms?Math.round(result.latency_ms)+'ms':elapsed+'ms';
+                    try { const p=JSON.parse(at);
+                        if(p.result&&p.result.payloads){at=p.result.payloads.map(x=>x.text).filter(Boolean).join('\n'); const u=p.result?.meta?.agentMeta?.usage; if(u)lat+=' | '+u.total.toLocaleString()+' tokens';}
+                        else if(p.text){at=p.text;}
+                        else if(p.message){at=p.message;}
+                        else if(p.response){at=p.response;}
+                        else if(p.summary){at=p.summary;}
+                        else{at='[Agent returned structured data — check logs for details]';}
+                    } catch{}
+                    chatHistories[ak].push({role:'agent',text:at,meta:lat});
+                }
+            } catch(e) { chatHistories[ak].push({role:'error',text:'Connection failed: '+e.message}); }
+            chatSending=false; document.getElementById('chatTyping').classList.remove('visible'); document.getElementById('chatSendBtn').disabled=false;
+            if (currentChatAgent===ak) renderChat();
+        }
+
+        function toggleActivity() { const s=document.getElementById('activitySection'),b=document.getElementById('activityToggle'); s.classList.toggle('collapsed'); b.textContent=s.classList.contains('collapsed')?'+':'-'; }
+
+        function updateTime() { document.getElementById('currentTime').textContent=new Date().toLocaleString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZoneName:'short'}); }
+
+        function startCountdown() { if(countdownInterval)clearInterval(countdownInterval); countdown=30; countdownInterval=setInterval(()=>{countdown--;document.getElementById('countdown').textContent=countdown;if(countdown<=0){loadData();countdown=30;}},1000); }
+
+        async function loadData() {
+            try { const r=await fetch('mission-control-data.json?t='+Date.now()); if(!r.ok) throw new Error(r.status); data=await r.json(); usingSampleData=false; }
+            catch { data=getSampleData(); usingSampleData=true; }
+            renderSyncBanner(); renderAll(); countdown=30; checkHermes();
+        }
+
+        function renderSyncBanner() {
+            let b=document.getElementById('syncBanner');
+            if(!b){ b=document.createElement('div'); b.id='syncBanner'; b.style.cssText='background:#d29922;color:#0d1117;text-align:center;padding:0.375rem 1rem;font-size:0.8125rem;font-weight:600;display:none;'; document.body.insertBefore(b,document.querySelector('.main')); }
+            if(usingSampleData){ b.textContent='Data sync not running — showing sample data. Run: python3 dashboard/sync-mission-data.py --watch'; b.style.display='block'; }
+            else { b.style.display='none'; }
+        }
+
+        function getSampleData() {
+            return { lastUpdated:new Date().toISOString(), agents:[
+                {name:'Coordinator',key:'coordinator',role:'Task Routing & Management',status:'idle',task:null,lastCheckin:'\u2014'},
+                {name:'Developer',key:'developer',role:'Code & Automation',status:'idle',task:null,lastCheckin:'\u2014'},
+                {name:'Researcher',key:'researcher',role:'Intelligence & Synthesis',status:'idle',task:null,lastCheckin:'\u2014'},
+                {name:'Monitor',key:'monitor',role:'Infrastructure Guardian',status:'idle',task:null,lastCheckin:'\u2014'},
+                {name:'Analyst',key:'analyst',role:'Budget & Cost Analysis',status:'idle',task:null,lastCheckin:'\u2014'},
+            ], tasks:{inbox:[],assigned:[],inProgress:[],review:[],done:[]}, activity:[], budget:{byProvider:[],byAgent:[],grandTotal:{inputTokens:0,outputTokens:0,totalTokens:0,sessionCount:0,providerCount:0}}, context:{packet:null,warnings:[]} };
+        }
+
+        function esc(s) { if(!s)return''; const d=document.createElement('span'); d.textContent=s; return d.textContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+        const expandedTaskIds = new Set();
+        function toggleTask(el, id) { el.classList.toggle('expanded'); el.classList.contains('expanded')?expandedTaskIds.add(id):expandedTaskIds.delete(id); }
+
+        function renderAgents() {
+            const c=document.getElementById('agentList'); let html='', ac=0;
+            data.agents.forEach(a=>{
+                if(a.status==='active')ac++;
+                const k=a.key||a.name.toLowerCase(), td=a.task||'\u2014';
+                html+='<div class="agent-card" data-agent="'+k+'" onclick="openChat(\''+k+'\')">'
+                    +'<div class="agent-header"><span class="agent-name">'+esc(a.name)+'</span><div class="agent-actions"><span class="chat-badge">chat</span><span class="status-indicator status-'+a.status+'" title="'+a.status+'"></span></div></div>'
+                    +'<div class="agent-role">'+esc(a.role)+'</div>'
+                    +'<div class="agent-task" title="'+esc(td)+'">'+esc(td)+'</div>'
+                    +'<div class="agent-checkin">'+esc(a.lastCheckin)+'</div></div>';
+            });
+            c.textContent=''; c.insertAdjacentHTML('beforeend',html);
+            document.getElementById('activeAgents').textContent=ac;
+        }
+
+        function renderTaskCard(t) {
+            let badge=t.commentCount>0?'<span class="task-comment-badge">'+t.commentCount+'</span>':'';
+            let detail='';
+            if(t.description||(t.comments&&t.comments.length)||(t.tags&&t.tags.length)){
+                let p=[];
+                if(t.priority&&t.priority!=='normal') p.push('<span class="task-priority '+esc(t.priority)+'">'+esc(t.priority)+'</span>');
+                if(t.description) p.push('<div class="task-description">'+esc(t.description)+'</div>');
+                if(t.tags&&t.tags.length) p.push('<div class="task-tags">'+t.tags.map(x=>'<span class="task-tag">'+esc(x)+'</span>').join('')+'</div>');
+                if(t.comments&&t.comments.length){ p.push('<div class="task-comments-header">Comments ('+t.comments.length+')</div>');
+                    t.comments.forEach(c=>p.push('<div class="task-comment"><div class="task-comment-meta"><span class="task-comment-agent">'+esc(c.agent)+'</span><span class="task-comment-time">'+esc(c.date)+' '+esc(c.time)+'</span></div><div class="task-comment-text">'+esc(c.text)+'</div></div>'));
+                }
+                detail='<div class="task-detail">'+p.join('')+'</div>';
+            }
+            const ec=expandedTaskIds.has(t.id)?' expanded':'';
+            return '<div class="task-card'+ec+'" onclick="toggleTask(this,\''+esc(t.id)+'\')"><div class="task-title-row"><div class="task-title">'+esc(t.title)+'</div>'+badge+'</div><div class="task-meta"><span class="task-agent">'+esc(t.agent||'\u2014')+'</span><span class="task-time">'+esc(t.time)+'</span></div>'+detail+'</div>';
+        }
+
+        function renderTasks() {
+            const cols=['inbox','assigned','inProgress','review','done'], cids=['inboxTasks','assignedTasks','progressTasks','reviewTasks','doneTasks'], nids=['inboxCount','assignedCount','progressCount','reviewCount','doneCount'];
+            let total=0;
+            cols.forEach((c,i)=>{
+                const el=document.getElementById(cids[i]), tasks=data.tasks[c]||[], n=tasks.length;
+                document.getElementById(nids[i]).textContent=n;
+                if(c!=='done')total+=n;
+                el.textContent='';
+                if(!n) el.insertAdjacentHTML('beforeend','<div class="empty-column">No tasks</div>');
+                else el.insertAdjacentHTML('beforeend',tasks.map(renderTaskCard).join(''));
+            });
+            document.getElementById('taskCount').textContent=total;
+        }
+
+        function renderActivity() {
+            const el=document.getElementById('activityList'); let html='';
+            (data.activity||[]).forEach(i=>html+='<div class="activity-item"><div class="activity-header"><span class="activity-agent">'+esc(i.agent)+'</span><span class="activity-time">'+esc(i.time)+'</span></div><div class="activity-text">'+esc(i.text)+'</div></div>');
+            el.textContent=''; el.insertAdjacentHTML('beforeend',html||'<div class="empty-column">No recent activity</div>');
+        }
+
+        function renderContext() {
+            const ctx = (data && data.context) || {};
+            const packet = ctx.packet || null;
+            const warnings = Array.isArray(ctx.warnings) ? ctx.warnings : [];
+
+            const ctxEl = document.getElementById('contextSummary');
+            const warnEl = document.getElementById('warningList');
+
+            if (!packet) {
+                ctxEl.textContent = '';
+                ctxEl.insertAdjacentHTML('beforeend', '<div class="empty-column">No CCRP packet found</div>');
+            } else {
+                const objective = packet.objective || 'No objective set';
+                const packetId = packet.packetId || 'unknown';
+                const who = packet.createdBy || 'unknown';
+                const when = packet.createdAt || 'unknown';
+                const oq = Number(packet.openQuestions || 0);
+                const actions = Array.isArray(packet.nextActions) ? packet.nextActions : [];
+                const next = actions.length ? actions.map(a => '- ' + esc(String(a))).join('\n') : 'No next actions listed';
+                const html = ''
+                    + '<div class="context-item">'
+                    + '<div class="context-title">'+esc(objective)+'</div>'
+                    + '<div class="context-meta">'+esc(packetId)+' | '+esc(who)+' | '+esc(when)+'</div>'
+                    + '<div class="context-meta">Open Questions: '+oq+'</div>'
+                    + '<div class="context-next">'+next+'</div>'
+                    + '</div>';
+                ctxEl.textContent = '';
+                ctxEl.insertAdjacentHTML('beforeend', html);
+            }
+
+            if (!warnings.length) {
+                warnEl.textContent = '';
+                warnEl.insertAdjacentHTML('beforeend', '<div class="empty-column">No active warnings</div>');
+                return;
+            }
+
+            let wHtml = '';
+            warnings.slice(0, 8).forEach(w => {
+                const sev = (w.severity || 'medium').toLowerCase();
+                const scope = w.scope ? ' / '+esc(w.scope) : '';
+                const src = esc(w.source || 'operator');
+                const tm = esc(w.time || '');
+                const msg = esc(w.message || '');
+                wHtml += ''
+                    + '<div class="warning-item '+sev+'">'
+                    + '<div class="warning-meta"><span class="warning-source">'+src+scope+'</span><span class="warning-level '+sev+'">'+sev+' '+tm+'</span></div>'
+                    + '<div class="warning-text">'+msg+'</div>'
+                    + '</div>';
+            });
+            warnEl.textContent = '';
+            warnEl.insertAdjacentHTML('beforeend', wHtml);
+        }
+
+        async function renderBudget() {
+            const el=document.getElementById('budgetInfo'); const parts=[];
+            const b=data&&data.budget;
+            if(b&&b.grandTotal){
+                const g=b.grandTotal, tt=g.inputTokens+g.outputTokens;
+                parts.push('<div class="budget-item"><span class="budget-label">Total Tokens</span><span class="budget-grand">'+formatTokens(tt)+'</span></div>');
+                parts.push('<div class="budget-item"><span class="budget-secondary">in: '+formatTokens(g.inputTokens)+' / out: '+formatTokens(g.outputTokens)+'</span><span class="budget-secondary">'+g.sessionCount+' sessions</span></div>');
+                if(b.byProvider&&b.byProvider.length){parts.push('<div class="budget-divider"><div class="budget-sub-header">By Provider</div>');for(const p of b.byProvider){const cl=PROVIDER_COLORS[p.provider]||'var(--text-secondary)';parts.push('<div class="budget-item"><span class="budget-label"><span style="color:'+cl+'">'+esc(p.provider)+'</span> <span class="budget-secondary">'+esc(p.model)+'</span></span><span class="budget-value">'+formatTokens(p.inputTokens+p.outputTokens)+'</span></div>');}parts.push('</div>');}
+                if(b.byAgent&&b.byAgent.length){parts.push('<div class="budget-divider"><div class="budget-sub-header">By Agent</div>');for(const a of b.byAgent){parts.push('<div class="budget-item"><span class="budget-label" style="padding-left:0.5rem">'+esc(a.name||a.agentId)+'</span><span class="budget-value">'+formatTokens(a.inputTokens+a.outputTokens)+'</span></div>');}parts.push('</div>');}
+            } else { parts.push('<div class="empty-column">No token data</div>'); }
+            parts.push('<div class="budget-divider"><div class="budget-sub-header">Bridge Activity</div>');
+            if(!hermesOnline){ parts.push('<div class="budget-item"><span class="budget-secondary">Hermes offline</span></div></div>'); }
+            else { try { const r=await fetch(HERMES_URL+'/api/v1/stats',{signal:AbortSignal.timeout(3000)}); const s=await r.json(); const d=s.daily_totals||{},h=s.hourly_by_agent||[],ru=s.in_memory_rate_counter||0,rl=s.global_limit||60,rp=Math.round(ru/rl*100),rc=rp>80?'budget-warning':'budget-ok';
+                parts.push('<div class="budget-item"><span class="budget-label">Calls (24h)</span><span class="budget-value">'+(d.total_calls_24h||0)+'</span></div>');
+                parts.push('<div class="budget-item"><span class="budget-label">Rate</span><span class="budget-value '+rc+'">'+ru+'/'+rl+' ('+rp+'%)</span></div>');
+                for(const a of h){const et=a.errors>0?' <span style="color:var(--red)">('+a.errors+' err)</span>':'';parts.push('<div class="budget-item"><span class="budget-label" style="padding-left:0.5rem">'+esc(a.caller_id)+'</span><span class="budget-value">'+a.calls+' calls'+et+'</span></div>');}
+                if(!h.length)parts.push('<div class="budget-item"><span class="budget-secondary" style="padding-left:0.5rem">No calls this hour</span></div>');
+                parts.push('</div>');
+            } catch { parts.push('<div class="budget-item"><span class="budget-secondary">Stats unavailable</span></div></div>'); } }
+            el.textContent=''; el.insertAdjacentHTML('beforeend',parts.join('\n'));
+        }
+
+        function renderAll() { renderAgents(); renderTasks(); renderActivity(); renderContext(); renderBudget(); }
+        setInterval(updateTime,1000); updateTime(); loadData(); startCountdown(); setInterval(checkHermes,30000);
+    </script>
+</body>
+</html>

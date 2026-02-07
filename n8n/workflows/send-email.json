@@ -1,0 +1,130 @@
+{
+  "name": "Send Email (SuperClaw)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "send-email-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate incoming payload\nconst body = $input.first().json.body;\n\nconst to = body.to;\nconst subject = body.subject;\nconst markdownBody = body.body;\nconst fromAgent = body.from_agent || 'Unknown Agent';\n\nif (!to || !subject || !markdownBody) {\n  throw new Error('Missing required fields: to, subject, body');\n}\n\n// Simple markdown to HTML conversion\nlet html = markdownBody;\n\n// Headers\nhtml = html.replace(/^######\\s+(.+)$/gm, '<h6>$1</h6>');\nhtml = html.replace(/^#####\\s+(.+)$/gm, '<h5>$1</h5>');\nhtml = html.replace(/^####\\s+(.+)$/gm, '<h4>$1</h4>');\nhtml = html.replace(/^###\\s+(.+)$/gm, '<h3>$1</h3>');\nhtml = html.replace(/^##\\s+(.+)$/gm, '<h2>$1</h2>');\nhtml = html.replace(/^#\\s+(.+)$/gm, '<h1>$1</h1>');\n\n// Bold and italic\nhtml = html.replace(/\\*\\*\\*(.+?)\\*\\*\\*/g, '<strong><em>$1</em></strong>');\nhtml = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');\nhtml = html.replace(/\\*(.+?)\\*/g, '<em>$1</em>');\n\n// Inline code\nhtml = html.replace(/`([^`]+)`/g, '<code style=\"background:#f4f4f4;padding:2px 6px;border-radius:3px;font-family:monospace;\">$1</code>');\n\n// Code blocks\nhtml = html.replace(/```[\\w]*\\n([\\s\\S]*?)```/g, '<pre style=\"background:#f4f4f4;padding:12px;border-radius:4px;overflow-x:auto;\"><code>$1</code></pre>');\n\n// Unordered lists\nhtml = html.replace(/^[\\-\\*]\\s+(.+)$/gm, '<li>$1</li>');\nhtml = html.replace(/(<li>.*<\\/li>)/s, '<ul>$1</ul>');\n\n// Links\nhtml = html.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href=\"$2\">$1</a>');\n\n// Horizontal rules\nhtml = html.replace(/^---$/gm, '<hr/>');\n\n// Line breaks: double newline = paragraph, single newline = <br>\nhtml = html.replace(/\\n\\n/g, '</p><p>');\nhtml = html.replace(/\\n/g, '<br/>');\nhtml = '<p>' + html + '</p>';\n\n// Clean up empty paragraphs\nhtml = html.replace(/<p><\\/p>/g, '');\n\n// Append agent footer\nconst footer = `<hr style=\"margin-top:24px;border:none;border-top:1px solid #ddd;\"/><p style=\"color:#888;font-size:12px;margin-top:8px;\">&mdash; Sent by <strong>${fromAgent}</strong> via SuperClaw</p>`;\nhtml += footer;\n\n// Wrap in a styled container\nconst fullHtml = `<div style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;line-height:1.6;color:#333;\">${html}</div>`;\n\nreturn [{\n  json: {\n    to,\n    subject,\n    htmlBody: fullHtml,\n    fromAgent,\n    originalMarkdown: markdownBody\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Convert Markdown to HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.htmlBody }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Send Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [660, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "superclaw-gmail-oauth2",
+          "name": "SuperClaw Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Email sent successfully', to: $json.to, subject: $json.subject, from_agent: $json.fromAgent, timestamp: new Date().toISOString() }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error || 'Failed to send email', timestamp: new Date().toISOString() }) }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000005",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Convert Markdown to HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Markdown to HTML": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "superclaw"
+    },
+    {
+      "name": "email"
+    }
+  ],
+  "triggerCount": 1,
+  "pinData": {},
+  "versionId": "1"
+}
